@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.db
+pending.json
+.env
+.venv/
+venv/
+.vscode/

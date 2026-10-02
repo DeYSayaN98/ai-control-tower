@@ -1,0 +1,12 @@
+# First matching rule wins. actions: allow | redact | block | approve
+rules:
+  - name: block-secrets
+    entities: [AWS_KEY, API_KEY, PRIVATE_KEY]
+    action: block
+  - name: approve-government-ids
+    entities: [AADHAAR, PAN, US_SSN]
+    action: approve
+  - name: redact-contact-and-cards
+    entities: [EMAIL, PHONE, CREDIT_CARD]
+    action: redact
+default_action: allow

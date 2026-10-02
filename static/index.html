@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI Control Tower</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eef1f4;--panel:#fff;--ink:#14202b;--mut:#5d6b78;--line:#dbe1e7;--accent:#0b5c6b;
+  --ok:#1b7f4b;--warn:#b26a00;--bad:#c2312d;--info:#2c5fa8;--idle:#7a8794;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media(prefers-color-scheme:dark){:root{--bg:#10171d;--panel:#182129;--ink:#e6ecf1;--mut:#93a1ae;--line:#2a3641;--accent:#5cc0d1;
+  --ok:#4cc38a;--warn:#e0a03a;--bad:#f0716c;--info:#7aa7e8;--idle:#8a97a3}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);
+  padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+.wrap{max-width:1280px;margin:0 auto;display:grid;gap:16px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+h1{font-size:1.35rem;font-weight:600;margin:0;letter-spacing:-.01em}
+.sub{color:var(--mut);font-size:.875rem;margin:2px 0 0}
+.pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel);
+  border-radius:999px;padding:6px 12px;font-size:.8125rem;min-height:36px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--idle)}
+.pill.ok .dot{background:var(--ok)}.pill.bad .dot{background:var(--bad)}.pill.bad{border-color:var(--bad);color:var(--bad)}
+
+/* verdict strip: the one memorable element */
+.verdict{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.bar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--line);margin:0 0 14px}
+.bar span{display:block;height:100%;transition:width .5s}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
+.stat b{display:block;font:500 1.6rem/1.1 var(--mono);font-variant-numeric:tabular-nums}
+.stat small{color:var(--mut);display:flex;align-items:center;gap:6px;margin-top:4px}
+.sw{width:10px;height:10px;border-radius:3px;flex:none}
+
+.cols{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;min-width:0}
+.panel>h2{font-size:1rem;font-weight:600;margin:0;padding:14px 16px;border-bottom:1px solid var(--line);
+  display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.count{font:400 .8125rem var(--mono);color:var(--mut)}
+.body{padding:4px 16px 12px}
+.empty{padding:20px 4px;color:var(--mut)}
+.empty code{font-family:var(--mono);background:var(--bg);padding:1px 6px;border-radius:4px}
+
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:inherit;font-size:.8125rem;border:1px solid var(--line);background:transparent;color:var(--ink);
+  border-radius:999px;padding:6px 12px;min-height:36px;cursor:pointer}
+.chip[aria-pressed=true]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+
+table{width:100%;border-collapse:collapse}
+th{font-weight:500;color:var(--mut);font-size:.8125rem;text-align:left;padding:10px 8px;border-bottom:1px solid var(--line)}
+td{padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top;font-size:.875rem;overflow-wrap:anywhere}
+tr:last-child td{border-bottom:0}
+.mono{font-family:var(--mono);font-size:.8125rem}
+.tag{display:inline-block;border-radius:6px;padding:2px 8px;font-size:.8125rem;font-weight:500;border:1px solid currentColor;white-space:nowrap}
+.t-allow,.t-allow_approved,.t-approved,.t-low{color:var(--ok)}
+.t-redact,.t-pending_approval,.t-pending,.t-high{color:var(--warn)}
+.t-block,.t-critical,.t-denied{color:var(--bad)}
+.t-medium{color:var(--info)}
+.score{display:flex;align-items:center;gap:8px}
+.meter{width:56px;height:6px;background:var(--line);border-radius:3px;overflow:hidden;flex:none}
+.meter i{display:block;height:100%;background:currentColor}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+button.act{font:inherit;font-size:.875rem;font-weight:500;cursor:pointer;border-radius:8px;padding:8px 14px;min-height:40px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+button.act.yes{background:var(--ok);border-color:var(--ok);color:#fff}
+button.act:hover{filter:brightness(.95)}
+
+/* tablet/phone: tables become stacked cards */
+@media(max-width:900px){.cols{grid-template-columns:1fr}}
+@media(max-width:720px){
+  table,tbody,tr,td{display:block;width:100%}
+  thead{position:absolute;left:-9999px}
+  tr{border-bottom:1px solid var(--line);padding:10px 0}
+  tr:last-child{border-bottom:0}
+  td{border:0;padding:3px 0;display:grid;grid-template-columns:96px 1fr;gap:8px}
+  td::before{content:attr(data-l);color:var(--mut);font-size:.8125rem}
+  td.nolabel{display:block}td.nolabel::before{display:none}
+  .stat b{font-size:1.35rem}
+}
+@media(max-width:380px){td{grid-template-columns:1fr;gap:0}}
+.toast{position:fixed;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translate(-50%,20px);opacity:0;
+  background:var(--ink);color:var(--panel);padding:10px 16px;border-radius:8px;transition:.25s;pointer-events:none;font-size:.875rem;max-width:90vw}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style></head>
+<body><div class="wrap">
+
+<header>
+  <div><h1>AI Control Tower</h1><p class="sub">Every AI request in your company, checked before it leaves.</p></div>
+  <div class="pill" id="chain" role="status"><span class="dot"></span><span>Checking audit log…</span></div>
+</header>
+
+<section class="verdict" aria-label="Request outcomes">
+  <div class="bar" id="bar" role="img" aria-label="Share of requests by outcome"></div>
+  <div class="stats" id="stats"></div>
+</section>
+
+<div class="cols">
+  <section class="panel"><h2>AI apps &amp; risk <span class="count" id="c-inv"></span></h2><div class="body" id="inv"></div></section>
+  <section class="panel"><h2>Waiting for approval <span class="count" id="c-apr"></span></h2><div class="body" id="apr"></div></section>
+</div>
+
+<section class="panel">
+  <h2>Activity log
+    <div class="chips" id="chips" role="group" aria-label="Filter activity">
+      <button class="chip" data-f="all" aria-pressed="true">All</button>
+      <button class="chip" data-f="block" aria-pressed="false">Blocked</button>
+      <button class="chip" data-f="redact" aria-pressed="false">Redacted</button>
+      <button class="chip" data-f="pending_approval" aria-pressed="false">Held</button>
+    </div>
+  </h2>
+  <div class="body" id="evt"></div>
+</section>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const tag=t=>`<span class="tag t-${esc(t)}">${esc(String(t).replace('_',' '))}</span>`;
+const API=async(u,o)=>{const r=await fetch(u,o);if(!r.ok)throw new Error(r.status);return r.json()};
+let filter='all',last={};
+
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2200)}
+async function decide(id,ok){
+  try{await API('/api/approvals/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approve:ok})});
+  toast(ok?'Approved. The app can now retry.':'Denied.');load()}catch(e){toast('Could not save decision')}}
+window.decide=decide;
+
+const OUT=[['allow','Allowed','var(--ok)',['allow','allow_approved']],['redact','Redacted','var(--warn)',['redact']],
+           ['pending','Held','var(--info)',['pending_approval']],['block','Blocked','var(--bad)',['block']]];
+function renderStats(s){
+  const n=k=>k.reduce((a,x)=>a+(s.by_action[x]||0),0),tot=s.total||1;
+  $('bar').innerHTML=OUT.map(o=>`<span style="width:${n(o[3])/tot*100}%;background:${o[2]}"></span>`).join('');
+  $('stats').innerHTML=`<div class="stat"><b>${s.total}</b><small>Requests</small></div>`+
+    OUT.map(o=>`<div class="stat"><b>${n(o[3])}</b><small><i class="sw" style="background:${o[2]}"></i>${o[1]}</small></div>`).join('')+
+    `<div class="stat"><b>${s.apps}</b><small>AI apps seen</small></div>`;
+}
+function renderInv(a){
+  $('c-inv').textContent=a.length?a.length+' apps':'';
+  if(!a.length){$('inv').innerHTML='<p class="empty">No AI apps yet. Send a request through the gateway, or run <code>python demo.py</code>.</p>';return}
+  $('inv').innerHTML='<table><thead><tr><th>App</th><th>Owner</th><th>Requests</th><th>Risk</th><th>Sensitive data seen</th></tr></thead><tbody>'+
+   a.map(x=>`<tr title="${esc(Object.entries(x.factors).map(([k,v])=>k.replace('_',' ')+': '+v).join(', '))}">
+    <td data-l="App"><b>${esc(x.app)}</b></td><td data-l="Owner">${esc(x.owner)}</td><td data-l="Requests" class="mono">${x.requests}</td>
+    <td data-l="Risk"><div class="score t-${esc(x.level)}"><span class="meter"><i style="width:${x.risk}%"></i></span><span class="mono">${x.risk}</span>${tag(x.level)}</div></td>
+    <td data-l="Data seen" class="mono">${esc(x.entities_seen.join(', ')||'none')}</td></tr>`).join('')+'</tbody></table>';
+}
+function renderApr(a){
+  const p=a.filter(x=>x.status==='pending').length;
+  $('c-apr').textContent=p?p+' pending':'';
+  if(!a.length){$('apr').innerHTML='<p class="empty">Nothing waiting. Requests with government IDs will appear here for a decision.</p>';return}
+  $('apr').innerHTML='<table><thead><tr><th>Request</th><th>App</th><th>Contains</th><th>Status</th></tr></thead><tbody>'+
+   a.map(x=>`<tr><td data-l="Request" class="mono">${esc(x.id)}</td><td data-l="App">${esc(x.app)}<br><span class="sub">${esc(x.user)}</span></td>
+    <td data-l="Contains" class="mono">${esc(x.entities.join(', '))}</td>
+    <td data-l="Status">${x.status==='pending'?`<div class="btns"><button class="act yes" onclick="decide('${esc(x.id)}',true)">Approve</button><button class="act" onclick="decide('${esc(x.id)}',false)">Deny</button></div>`:tag(x.status)}</td></tr>`).join('')+'</tbody></table>';
+}
+function renderEvt(){
+  const e=(last.evt||[]).filter(x=>filter==='all'||x.action===filter);
+  if(!e.length){$('evt').innerHTML='<p class="empty">No matching activity yet.</p>';return}
+  $('evt').innerHTML='<table><thead><tr><th>Time</th><th>App / user</th><th>Model</th><th>Outcome</th><th>Rule</th><th>Found</th><th>Prompt (sensitive data hidden)</th></tr></thead><tbody>'+
+   e.map(x=>`<tr><td data-l="Time" class="mono">${new Date(x.ts*1000).toLocaleTimeString()}</td>
+    <td data-l="App"><b>${esc(x.app)}</b><br><span class="sub">${esc(x.user)}</span></td><td data-l="Model" class="mono">${esc(x.model)}</td>
+    <td data-l="Outcome">${tag(x.action)}</td><td data-l="Rule" class="mono">${esc(x.policy)}</td>
+    <td data-l="Found" class="mono">${esc(x.entities.join(', ')||'none')}</td><td data-l="Prompt">${esc(x.preview)}</td></tr>`).join('')+'</tbody></table>';
+}
+$('chips').addEventListener('click',ev=>{const b=ev.target.closest('.chip');if(!b)return;filter=b.dataset.f;
+  document.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',c===b));renderEvt()});
+
+async function load(){
+  try{
+    const [s,inv,apr,evt,ch]=await Promise.all([API('/api/stats'),API('/api/inventory'),API('/api/approvals'),API('/api/events'),API('/api/audit/verify')]);
+    last.evt=evt;renderStats(s);renderInv(inv);renderApr(apr);renderEvt();
+    const c=$('chain');c.className='pill '+(ch.valid?'ok':'bad');
+    c.lastElementChild.textContent=ch.valid?'Audit log intact':'Audit log altered at entry '+ch.broken_at;
+  }catch(e){const c=$('chain');c.className='pill bad';c.lastElementChild.textContent='Gateway not reachable'}
+}
+load();setInterval(()=>{if(!document.hidden)load()},3000);
+</script></body></html>
